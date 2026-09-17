@@ -1,0 +1,79 @@
+# =========================
+# Node.js
+# =========================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# =========================
+# Environment / Secrets
+# =========================
+.env
+.env.*
+!.env.example
+
+# =========================
+# Logs
+# =========================
+logs/
+*.log
+
+# =========================
+# Flutter / Dart
+# =========================
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+build/
+
+# =========================
+# IDE
+# =========================
+.idea/
+*.iml
+
+# VS Code
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# =========================
+# Android
+# =========================
+mobile/android/.gradle/
+mobile/android/local.properties
+mobile/android/app/debug/
+mobile/android/app/profile/
+mobile/android/app/release/
+
+# =========================
+# iOS
+# =========================
+mobile/ios/Pods/
+mobile/ios/.symlinks/
+mobile/ios/Flutter/ephemeral/
+mobile/ios/Flutter/Generated.xcconfig
+mobile/ios/Flutter/flutter_export_environment.sh
+
+# =========================
+# Local database / Docker data
+# =========================
+data/
+mongo-data/
+
+# =========================
+# Windows
+# =========================
+Thumbs.db
+Desktop.ini
+
+# =========================
+# macOS
+# =========================
+.DS_Store
+# Flutter SDK (local installation)
+/flutter/

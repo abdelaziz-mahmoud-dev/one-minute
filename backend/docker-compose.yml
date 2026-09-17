@@ -1,0 +1,25 @@
+services:
+  api:
+    build: .
+    container_name: one-minute-api
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: 3000
+      NODE_ENV: production
+      MONGODB_URI: mongodb://mongo:27017/one-minute
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: 7d
+    depends_on:
+      - mongo
+
+  mongo:
+    image: mongo:8
+    container_name: one-minute-mongo
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+
+volumes:
+  mongo_data:
