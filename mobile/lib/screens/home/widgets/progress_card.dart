@@ -14,11 +14,15 @@ class ProgressCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final xpTowardsNext = dashboard.nextLevelXp == 0
-        ? 0.0
-        : (dashboard.totalXp / dashboard.nextLevelXp).clamp(0.0, 1.0);
+    final levelStartXp = (dashboard.level - 1) * 100;
 
-    final percentage = (xpTowardsNext * 100).round();
+    final xpIntoLevel =
+        (dashboard.totalXp - levelStartXp).clamp(0, 100);
+
+    final progress = xpIntoLevel / 100;
+    final percentage = (progress * 100).round();
+
+    final xpRemaining = 100 - xpIntoLevel;
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -36,7 +40,7 @@ class ProgressCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  'Your progress',
+                  'Level ${dashboard.level}',
                   style: AppTextStyles.titleLarge,
                 ),
               ),
@@ -51,17 +55,29 @@ class ProgressCard extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            '${dashboard.totalXp} of ${dashboard.nextLevelXp} XP to next level',
+            '$xpRemaining XP to level ${dashboard.level + 1}',
             style: AppTextStyles.bodySmall,
           ),
           const SizedBox(height: 18),
           ClipRRect(
             borderRadius: BorderRadius.circular(10),
-            child: LinearProgressIndicator(
-              value: xpTowardsNext,
-              minHeight: 10,
-              backgroundColor: AppColors.primaryLight,
-              color: AppColors.primary,
+            child: TweenAnimationBuilder<double>(
+              tween: Tween<double>(
+                begin: 0,
+                end: progress,
+              ),
+              duration: const Duration(
+                milliseconds: 700,
+              ),
+              curve: Curves.easeOutCubic,
+              builder: (context, value, child) {
+                return LinearProgressIndicator(
+                  value: value,
+                  minHeight: 10,
+                  backgroundColor: AppColors.primaryLight,
+                  color: AppColors.primary,
+                );
+              },
             ),
           ),
           const SizedBox(height: 20),

@@ -30,6 +30,34 @@ class _LearningPathScreenState extends State<LearningPathScreen> {
     });
   }
 
+  void _continuePath(BuildContext context, LearningProvider provider) {
+    final path = provider.currentPath;
+
+    if (path == null || path.minutes.isEmpty) {
+      return;
+    }
+
+    final incompleteMinutes = path.minutes
+        .where((minute) => !minute.isCompleted)
+        .toList()
+      ..sort((a, b) => a.order.compareTo(b.order));
+
+    if (incompleteMinutes.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('🎉 You completed this learning path!'),
+        ),
+      );
+      return;
+    }
+
+    Navigator.pushNamed(
+      context,
+      AppRoutes.minute,
+      arguments: incompleteMinutes.first.id,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -39,10 +67,13 @@ class _LearningPathScreenState extends State<LearningPathScreen> {
       body: Consumer<LearningProvider>(
         builder: (context, provider, _) {
           if (provider.isLoading && provider.currentPath == null) {
-            return const AppLoading(message: 'Loading path...');
+            return const AppLoading(
+              message: 'Loading path...',
+            );
           }
 
-          if (provider.error != null && provider.currentPath == null) {
+          if (provider.error != null &&
+              provider.currentPath == null) {
             return AppError(
               message: provider.error!,
               onRetry: () => provider.loadPath(widget.pathId),
@@ -59,7 +90,16 @@ class _LearningPathScreenState extends State<LearningPathScreen> {
 
           final progress = path.minuteCount == 0
               ? 0.0
-              : (path.completedMinutes / path.minuteCount).clamp(0.0, 1.0);
+              : (path.completedMinutes / path.minuteCount)
+                  .clamp(0.0, 1.0);
+
+          final incompleteMinutes = path.minutes
+              .where((minute) => !minute.isCompleted)
+              .toList()
+            ..sort((a, b) => a.order.compareTo(b.order));
+
+          final isCompleted = incompleteMinutes.isEmpty &&
+              path.minutes.isNotEmpty;
 
           return RefreshIndicator(
             onRefresh: () => provider.loadPath(widget.pathId),
@@ -117,31 +157,58 @@ class _LearningPathScreenState extends State<LearningPathScreen> {
                   ),
                 ),
                 const SizedBox(height: 24),
-                Text(
-                  'Start learning',
-                  style: AppTextStyles.titleLarge,
-                ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  height: 52,
-                  child: ElevatedButton.icon(
-                    onPressed: path.minutes.isEmpty
-                        ? null
-                        : () {
-                            Navigator.pushNamed(
-                              context,
-                              AppRoutes.minute,
-                              arguments: path.minutes.first.id,
-                            );
-                          },
-                    icon: const Icon(Icons.play_arrow_rounded),
-                    label: Text(
-                      path.completedMinutes > 0
-                          ? 'Continue path'
-                          : 'Start path',
+
+                if (isCompleted) ...[
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        children: [
+                          const Icon(
+                            Icons.emoji_events_rounded,
+                            size: 56,
+                            color: AppColors.primary,
+                          ),
+                          const SizedBox(height: 14),
+                          Text(
+                            'Path Completed!',
+                            style: AppTextStyles.headlineMedium,
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'You completed all ${path.minuteCount} learning minutes.',
+                            style: AppTextStyles.bodyMedium.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
+                ] else ...[
+                  Text(
+                    'Start learning',
+                    style: AppTextStyles.titleLarge,
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    height: 52,
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        _continuePath(context, provider);
+                      },
+                      icon: const Icon(Icons.play_arrow_rounded),
+                      label: Text(
+                        path.completedMinutes > 0
+                            ? 'Continue path'
+                            : 'Start path',
+                      ),
+                    ),
+                  ),
+                ],
+
                 const SizedBox(height: 24),
                 Text(
                   '${path.minuteCount} learning minutes',

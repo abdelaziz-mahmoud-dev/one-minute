@@ -112,4 +112,15 @@ minuteSchema.index({
   isPublished: 1
 });
 
+minuteSchema.index({
+  isPublished: 1,
+  createdAt: 1
+});
+
+minuteSchema.index({
+  isPublished: 1,
+  category: 1,
+  order: 1
+});
+
 module.exports = mongoose.model("Minute", minuteSchema);

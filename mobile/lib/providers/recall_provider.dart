@@ -6,7 +6,8 @@ import '../repositories/recall_repository.dart';
 class RecallProvider extends ChangeNotifier {
   RecallProvider({
     RecallRepository? repository,
-  }) : _repository = repository ?? RecallRepository();
+  }) : _repository =
+            repository ?? RecallRepository();
 
   final RecallRepository _repository;
 
@@ -23,10 +24,10 @@ class RecallProvider extends ChangeNotifier {
 
   Future<void> loadRecall() async {
     _setLoading(true);
+    _error = null;
 
     try {
       _items = await _repository.getRecallItems();
-      _error = null;
     } catch (e) {
       _error = e.toString();
     } finally {
@@ -34,22 +35,28 @@ class RecallProvider extends ChangeNotifier {
     }
   }
 
-  Future<Map<String, dynamic>?> answerRecall({
+  Future<bool> answerRecall({
     required String recallId,
-    required String answer,
+    required int score,
   }) async {
+    if (_isSubmitting) {
+      return false;
+    }
+
     _isSubmitting = true;
     _error = null;
     notifyListeners();
 
     try {
-      return await _repository.answerRecall(
+      await _repository.answerRecall(
         recallId: recallId,
-        answer: answer,
+        score: score,
       );
+
+      return true;
     } catch (e) {
       _error = e.toString();
-      return null;
+      return false;
     } finally {
       _isSubmitting = false;
       notifyListeners();
@@ -58,6 +65,12 @@ class RecallProvider extends ChangeNotifier {
 
   void clearItems() {
     _items = [];
+    _error = null;
+    notifyListeners();
+  }
+
+  void clearError() {
+    _error = null;
     notifyListeners();
   }
 

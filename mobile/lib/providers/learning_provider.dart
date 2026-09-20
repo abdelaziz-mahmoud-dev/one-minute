@@ -61,15 +61,15 @@ class LearningProvider extends ChangeNotifier {
     }
   }
 
-  Future<LearningPathModel?> loadPath(
-    String id,
-  ) async {
+  Future<LearningPathModel?> loadPath(String id) async {
     _setLoading(true);
 
     try {
       final path = await _repository.getLearningPath(id);
+
       _currentPath = path;
       _error = null;
+
       return path;
     } catch (e) {
       _error = e.toString();
@@ -79,14 +79,13 @@ class LearningProvider extends ChangeNotifier {
     }
   }
 
-  Future<MinuteModel?> loadMinute(
-    String id,
-  ) async {
+  Future<MinuteModel?> loadMinute(String id) async {
     _setLoading(true);
 
     try {
       _currentMinute = await _repository.getMinute(id);
       _error = null;
+
       return _currentMinute;
     } catch (e) {
       _error = e.toString();
@@ -96,8 +95,41 @@ class LearningProvider extends ChangeNotifier {
     }
   }
 
+  void updateCurrentMinuteCompletion({
+    required bool completed,
+  }) {
+    final minute = _currentMinute;
+
+    if (minute == null) {
+      return;
+    }
+
+    _currentMinute = MinuteModel(
+      id: minute.id,
+      title: minute.title,
+      content: minute.content,
+      summary: minute.summary,
+      pathId: minute.pathId,
+      pathTitle: minute.pathTitle,
+      order: minute.order,
+      xpReward: minute.xpReward,
+      isCompleted: completed,
+      question: minute.question,
+      options: minute.options,
+      correctAnswer: minute.correctAnswer,
+      explanation: minute.explanation,
+    );
+
+    notifyListeners();
+  }
+
   void clearCurrentMinute() {
     _currentMinute = null;
+    notifyListeners();
+  }
+
+  void clearError() {
+    _error = null;
     notifyListeners();
   }
 

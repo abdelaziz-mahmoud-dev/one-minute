@@ -8,20 +8,30 @@ import '../../core/widgets/app_loading.dart';
 import '../../providers/progress_provider.dart';
 
 class ProgressScreen extends StatefulWidget {
-  const ProgressScreen({super.key});
+  const ProgressScreen({
+    super.key,
+  });
 
   @override
-  State<ProgressScreen> createState() => _ProgressScreenState();
+  State<ProgressScreen> createState() =>
+      _ProgressScreenState();
 }
 
-class _ProgressScreenState extends State<ProgressScreen> {
+class _ProgressScreenState
+    extends State<ProgressScreen> {
   @override
   void initState() {
     super.initState();
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<ProgressProvider>().loadProgress();
-    });
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) {
+        if (!mounted) return;
+
+        context
+            .read<ProgressProvider>()
+            .loadProgress();
+      },
+    );
   }
 
   @override
@@ -32,95 +42,136 @@ class _ProgressScreenState extends State<ProgressScreen> {
       ),
       body: Consumer<ProgressProvider>(
         builder: (context, provider, _) {
-          if (provider.isLoading && provider.progress.isEmpty) {
+          if (provider.isLoading &&
+              provider.progress.isEmpty) {
             return const AppLoading(
-              message: 'Loading your progress...',
+              message:
+                  'Loading your progress...',
             );
           }
 
-          if (provider.error != null && provider.progress.isEmpty) {
+          if (provider.error != null &&
+              provider.progress.isEmpty) {
             return AppError(
               message: provider.error!,
               onRetry: provider.loadProgress,
             );
           }
 
-          if (provider.progress.isEmpty) {
-            return const Center(
-              child: Text('You have no progress yet.'),
-            );
-          }
-
-          final completed = provider.progress
-              .where((item) => item.completed)
-              .length;
-
-          final correct = provider.progress
-              .where((item) => item.correct)
-              .length;
-
           return RefreshIndicator(
             onRefresh: provider.loadProgress,
             child: ListView(
-              padding: const EdgeInsets.all(20),
+              physics:
+                  const AlwaysScrollableScrollPhysics(),
+              padding:
+                  const EdgeInsets.all(20),
               children: [
+                _OverviewCard(
+                  summary: provider.summary,
+                ),
+
+                const SizedBox(height: 16),
+
                 Row(
                   children: [
                     Expanded(
                       child: _StatCard(
-                        icon: Icons.check_circle_rounded,
-                        value: '$completed',
+                        icon:
+                            Icons.check_circle_rounded,
+                        value: provider
+                            .summary
+                            .completedMinutes
+                            .toString(),
                         label: 'Completed',
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: _StatCard(
-                        icon: Icons.emoji_events_rounded,
-                        value: '$correct',
-                        label: 'Correct',
+                        icon:
+                            Icons.local_fire_department_rounded,
+                        value: provider
+                            .summary
+                            .streak
+                            .toString(),
+                        label: 'Day streak',
                       ),
                     ),
                   ],
                 ),
+
                 const SizedBox(height: 28),
+
                 Text(
                   'Learning history',
-                  style: AppTextStyles.headlineMedium,
+                  style:
+                      AppTextStyles.headlineMedium,
                 ),
+
+                const SizedBox(height: 6),
+
+                Text(
+                  '${provider.pagination.total} learning records',
+                  style:
+                      AppTextStyles.bodyMedium.copyWith(
+                    color:
+                        AppColors.textSecondary,
+                  ),
+                ),
+
                 const SizedBox(height: 14),
+
+                if (provider.progress.isEmpty)
+                  const Padding(
+                    padding:
+                        EdgeInsets.only(top: 40),
+                    child: Center(
+                      child: Text(
+                        'You have no progress yet.',
+                      ),
+                    ),
+                  ),
+
                 ...provider.progress.map(
                   (item) => Card(
-                    margin: const EdgeInsets.only(bottom: 10),
+                    margin:
+                        const EdgeInsets.only(
+                      bottom: 10,
+                    ),
                     child: ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: item.completed
-                            ? AppColors.success.withValues(alpha: 0.12)
-                            : AppColors.background,
-                        child: Icon(
-                          item.completed
-                              ? Icons.check_rounded
-                              : Icons.menu_book_rounded,
-                          color: item.completed
-                              ? AppColors.success
-                              : AppColors.textSecondary,
-                        ),
+                      contentPadding:
+                          const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 6,
+                      ),
+                      leading:
+                          _ProgressIcon(
+                        completed:
+                            item.completed,
+                        correct:
+                            item.correct,
                       ),
                       title: Text(
-                        item.minuteTitle ?? '',
-                        style: AppTextStyles.titleMedium,
+                        item.minuteTitle ??
+                            'Learning minute',
+                        style:
+                            AppTextStyles.titleMedium,
                       ),
                       subtitle: Text(
-                        item.completed
-                            ? 'Completed • ${item.xpEarned} XP'
-                            : 'Not completed',
+                        _subtitleFor(item),
                       ),
-                      trailing: item.correct
-                          ? const Icon(
-                              Icons.verified_rounded,
-                              color: AppColors.success,
-                            )
-                          : null,
+                      trailing:
+                          item.xpEarned > 0
+                              ? Text(
+                                  '+${item.xpEarned} XP',
+                                  style: AppTextStyles
+                                      .labelLarge
+                                      .copyWith(
+                                    color: AppColors
+                                        .primary,
+                                  ),
+                                )
+                              : null,
                     ),
                   ),
                 ),
@@ -128,6 +179,153 @@ class _ProgressScreenState extends State<ProgressScreen> {
             ),
           );
         },
+      ),
+    );
+  }
+
+  String _subtitleFor(
+    dynamic item,
+  ) {
+    if (item.completed) {
+      return 'Completed • ${item.attempts} attempt${item.attempts == 1 ? '' : 's'}';
+    }
+
+    if (item.attempts > 0) {
+      return '${item.attempts} attempt${item.attempts == 1 ? '' : 's'} • Not completed';
+    }
+
+    return 'Not completed';
+  }
+}
+
+class _OverviewCard extends StatelessWidget {
+  final dynamic summary;
+
+  const _OverviewCard({
+    required this.summary,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final currentXp = summary.xp;
+    final nextLevelXp = summary.nextLevelXp;
+
+    final progress = nextLevelXp <= 0
+        ? 0.0
+        : (currentXp / nextLevelXp)
+            .clamp(0.0, 1.0);
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment:
+              CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 24,
+                  backgroundColor:
+                      AppColors.primaryLight,
+                  child: Text(
+                    'L${summary.level}',
+                    style:
+                        AppTextStyles.labelLarge
+                            .copyWith(
+                      color:
+                          AppColors.primary,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment:
+                        CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Level ${summary.level}',
+                        style:
+                            AppTextStyles.titleLarge,
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        '${summary.xp} XP',
+                        style:
+                            AppTextStyles.bodyMedium
+                                .copyWith(
+                          color: AppColors
+                              .textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(
+                  Icons.auto_awesome_rounded,
+                  color: AppColors.primary,
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 18),
+
+            ClipRRect(
+              borderRadius:
+                  BorderRadius.circular(10),
+              child: LinearProgressIndicator(
+                value: progress,
+                minHeight: 8,
+              ),
+            ),
+
+            const SizedBox(height: 8),
+
+            Text(
+              '${summary.xp} / ${summary.nextLevelXp} XP to next level',
+              style:
+                  AppTextStyles.bodySmall.copyWith(
+                color:
+                    AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ProgressIcon extends StatelessWidget {
+  final bool completed;
+  final bool correct;
+
+  const _ProgressIcon({
+    required this.completed,
+    required this.correct,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = completed
+        ? AppColors.success
+        : AppColors.textSecondary;
+
+    final icon = completed
+        ? Icons.check_rounded
+        : Icons.menu_book_rounded;
+
+    return CircleAvatar(
+      backgroundColor:
+          completed
+              ? AppColors.success.withValues(
+                  alpha: 0.12,
+                )
+              : AppColors.background,
+      child: Icon(
+        icon,
+        color: color,
       ),
     );
   }
@@ -159,13 +357,16 @@ class _StatCard extends StatelessWidget {
             const SizedBox(height: 10),
             Text(
               value,
-              style: AppTextStyles.headlineMedium,
+              style:
+                  AppTextStyles.headlineMedium,
             ),
             const SizedBox(height: 4),
             Text(
               label,
-              style: AppTextStyles.bodySmall.copyWith(
-                color: AppColors.textSecondary,
+              style:
+                  AppTextStyles.bodySmall.copyWith(
+                color:
+                    AppColors.textSecondary,
               ),
             ),
           ],

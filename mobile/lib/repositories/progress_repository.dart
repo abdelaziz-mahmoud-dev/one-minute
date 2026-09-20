@@ -9,7 +9,7 @@ class ProgressRepository {
 
   final ProgressService _progressService;
 
-  Future<List<ProgressModel>> getProgress({
+  Future<ProgressPage> getProgress({
     int page = 1,
     int limit = 20,
   }) {
@@ -20,7 +20,8 @@ class ProgressRepository {
   }
 
   Future<List<ProgressModel>> getCompletedProgress() {
-    return _progressService.getCompletedProgress();
+    return _progressService
+        .getCompletedProgress();
   }
 
   Future<Map<String, dynamic>> answerMinute({

@@ -6,23 +6,38 @@ import '../repositories/progress_repository.dart';
 class ProgressProvider extends ChangeNotifier {
   ProgressProvider({
     ProgressRepository? repository,
-  }) : _repository = repository ?? ProgressRepository();
+  }) : _repository =
+            repository ?? ProgressRepository();
 
   final ProgressRepository _repository;
 
   List<ProgressModel> _progress = [];
   List<ProgressModel> _completedProgress = [];
 
+  ProgressSummary _summary =
+      const ProgressSummary();
+
+  ProgressPagination _pagination =
+      const ProgressPagination();
+
   bool _isLoading = false;
   bool _isSubmitting = false;
   String? _error;
 
   List<ProgressModel> get progress => _progress;
+
   List<ProgressModel> get completedProgress =>
       _completedProgress;
 
+  ProgressSummary get summary => _summary;
+
+  ProgressPagination get pagination =>
+      _pagination;
+
   bool get isLoading => _isLoading;
+
   bool get isSubmitting => _isSubmitting;
+
   String? get error => _error;
 
   Future<void> loadProgress({
@@ -32,10 +47,15 @@ class ProgressProvider extends ChangeNotifier {
     _setLoading(true);
 
     try {
-      _progress = await _repository.getProgress(
+      final result =
+          await _repository.getProgress(
         page: page,
         limit: limit,
       );
+
+      _progress = result.progress;
+      _summary = result.summary;
+      _pagination = result.pagination;
 
       _error = null;
     } catch (e) {
@@ -50,7 +70,8 @@ class ProgressProvider extends ChangeNotifier {
 
     try {
       _completedProgress =
-          await _repository.getCompletedProgress();
+          await _repository
+              .getCompletedProgress();
 
       _error = null;
     } catch (e) {
@@ -64,15 +85,22 @@ class ProgressProvider extends ChangeNotifier {
     required String minuteId,
     required int answer,
   }) async {
+    if (_isSubmitting) {
+      return null;
+    }
+
     _isSubmitting = true;
     _error = null;
     notifyListeners();
 
     try {
-      return await _repository.answerMinute(
+      final result =
+          await _repository.answerMinute(
         minuteId: minuteId,
         answer: answer,
       );
+
+      return result;
     } catch (e) {
       _error = e.toString();
       return null;
@@ -80,6 +108,11 @@ class ProgressProvider extends ChangeNotifier {
       _isSubmitting = false;
       notifyListeners();
     }
+  }
+
+  void clearError() {
+    _error = null;
+    notifyListeners();
   }
 
   void _setLoading(bool value) {

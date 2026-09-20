@@ -29,15 +29,21 @@ class RecallService {
 
   Future<Map<String, dynamic>> answerRecall({
     required String recallId,
-    required String answer,
+    required int score,
   }) async {
+    if (score < 0 || score > 5) {
+      throw ArgumentError(
+        'Recall score must be between 0 and 5.',
+      );
+    }
+
     final token = _requireToken();
 
     final response = await _apiClient.post(
       ApiConstants.answerRecall(recallId),
       token: token,
       body: {
-        'answer': answer,
+        'score': score,
       },
     );
 
@@ -58,7 +64,9 @@ class RecallService {
     final token = _storageService.getToken();
 
     if (token == null || token.isEmpty) {
-      throw StateError('User is not authenticated.');
+      throw StateError(
+        'User is not authenticated.',
+      );
     }
 
     return token;
@@ -73,6 +81,12 @@ class RecallService {
       data = response['data'] ??
           response['items'] ??
           response['recall'];
+    }
+
+    if (data is Map) {
+      data = data['recalls'] ??
+          data['items'] ??
+          data['data'];
     }
 
     if (data is! List) {

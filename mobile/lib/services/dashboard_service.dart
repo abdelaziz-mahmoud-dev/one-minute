@@ -24,7 +24,10 @@ class DashboardService {
     );
 
     return DashboardModel.fromJson(
-      _extractObject(response, key: 'dashboard'),
+      _extractObject(
+        response,
+        key: 'dashboard',
+      ),
     );
   }
 
@@ -37,7 +40,10 @@ class DashboardService {
     );
 
     return MinuteModel.fromJson(
-      _extractObject(response, key: 'minute'),
+      _extractObject(
+        response,
+        key: 'minute',
+      ),
     );
   }
 
@@ -45,7 +51,9 @@ class DashboardService {
     final token = _storageService.getToken();
 
     if (token == null || token.isEmpty) {
-      throw StateError('User is not authenticated.');
+      throw StateError(
+        'User is not authenticated.',
+      );
     }
 
     return token;
@@ -56,23 +64,35 @@ class DashboardService {
     required String key,
   }) {
     if (response is! Map) {
-      throw StateError('Unexpected server response format.');
+      throw StateError(
+        'Unexpected server response format.',
+      );
     }
 
-    final outer = Map<String, dynamic>.from(response);
+    final outer =
+        Map<String, dynamic>.from(response);
 
-    dynamic data = outer['data'] ?? outer[key] ?? outer;
+    dynamic data =
+        outer['data'] ??
+        outer[key] ??
+        outer;
 
     if (data is Map) {
       final inner = data[key];
 
       if (inner is Map) {
-        return Map<String, dynamic>.from(inner);
+        return Map<String, dynamic>.from(
+          inner,
+        );
       }
 
-      return Map<String, dynamic>.from(data);
+      return Map<String, dynamic>.from(
+        data,
+      );
     }
 
-    return outer;
+    throw StateError(
+      'Invalid $key response format.',
+    );
   }
 }

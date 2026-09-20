@@ -15,11 +15,11 @@ class RecallRepository {
 
   Future<Map<String, dynamic>> answerRecall({
     required String recallId,
-    required String answer,
+    required int score,
   }) {
     return _recallService.answerRecall(
       recallId: recallId,
-      answer: answer,
+      score: score,
     );
   }
 }
