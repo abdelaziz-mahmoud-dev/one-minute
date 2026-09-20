@@ -165,10 +165,18 @@ const getMinute = async (req, res) => {
     });
   }
 
+  const progress = await UserProgress.findOne({
+    user: req.user._id,
+    minute: minute._id
+  }).select("completed");
+
   res.status(200).json({
     success: true,
     data: {
-      minute
+      minute: {
+        ...minute.toObject(),
+        isCompleted: progress?.completed === true
+      }
     }
   });
 };

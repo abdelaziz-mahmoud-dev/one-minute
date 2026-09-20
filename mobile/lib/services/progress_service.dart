@@ -14,7 +14,7 @@ class ProgressService {
   final ApiClient _apiClient;
   final StorageService _storageService;
 
-  Future<List<ProgressModel>> getProgress({
+  Future<ProgressPage> getProgress({
     int page = 1,
     int limit = 20,
   }) async {
@@ -29,9 +29,7 @@ class ProgressService {
       },
     );
 
-    return _extractList(response)
-        .map(ProgressModel.fromJson)
-        .toList();
+    return _parseProgressPage(response);
   }
 
   Future<List<ProgressModel>> getCompletedProgress() async {
@@ -78,10 +76,74 @@ class ProgressService {
     final token = _storageService.getToken();
 
     if (token == null || token.isEmpty) {
-      throw StateError('User is not authenticated.');
+      throw StateError(
+        'User is not authenticated.',
+      );
     }
 
     return token;
+  }
+
+  ProgressPage _parseProgressPage(
+    dynamic response,
+  ) {
+    if (response is! Map) {
+      return const ProgressPage();
+    }
+
+    final outer =
+        Map<String, dynamic>.from(response);
+
+    dynamic rawData = outer['data'];
+
+    if (rawData is! Map) {
+      rawData = outer;
+    }
+
+    final data =
+        Map<String, dynamic>.from(rawData);
+
+    final rawProgress = data['progress'];
+
+    final progress = rawProgress is List
+        ? rawProgress
+            .whereType<Map>()
+            .map(
+              (item) =>
+                  ProgressModel.fromJson(
+                Map<String, dynamic>.from(item),
+              ),
+            )
+            .toList()
+        : <ProgressModel>[];
+
+    final rawSummary = data['summary'];
+
+    final summary = rawSummary is Map
+        ? ProgressSummary.fromJson(
+            Map<String, dynamic>.from(
+              rawSummary,
+            ),
+          )
+        : const ProgressSummary();
+
+    final rawPagination =
+        data['pagination'];
+
+    final pagination =
+        rawPagination is Map
+            ? ProgressPagination.fromJson(
+                Map<String, dynamic>.from(
+                  rawPagination,
+                ),
+              )
+            : const ProgressPagination();
+
+    return ProgressPage(
+      progress: progress,
+      summary: summary,
+      pagination: pagination,
+    );
   }
 
   List<Map<String, dynamic>> _extractList(
@@ -96,7 +158,8 @@ class ProgressService {
     }
 
     if (data is Map) {
-      data = data['progress'] ?? data['items'];
+      data = data['progress'] ??
+          data['items'];
     }
 
     if (data is! List) {
@@ -106,8 +169,22 @@ class ProgressService {
     return data
         .whereType<Map>()
         .map(
-          (item) => Map<String, dynamic>.from(item),
+          (item) =>
+              Map<String, dynamic>.from(item),
         )
         .toList();
   }
+}
+
+class ProgressPage {
+  final List<ProgressModel> progress;
+  final ProgressSummary summary;
+  final ProgressPagination pagination;
+
+  const ProgressPage({
+    this.progress = const [],
+    this.summary = const ProgressSummary(),
+    this.pagination =
+        const ProgressPagination(),
+  });
 }

@@ -25,97 +25,140 @@ class AppRouter {
   static Route<dynamic> generateRoute(
     RouteSettings settings,
   ) {
+    late final Widget page;
+
     switch (settings.name) {
       case AppRoutes.splash:
-        return MaterialPageRoute(
-          builder: (_) => const SplashScreen(),
-        );
+        page = const SplashScreen();
+        break;
 
       case AppRoutes.onboarding:
-        return MaterialPageRoute(
-          builder: (_) => const OnboardingScreen(),
-        );
+        page = const OnboardingScreen();
+        break;
 
       case AppRoutes.login:
-        return MaterialPageRoute(
-          builder: (_) => const LoginScreen(),
-        );
+        page = const LoginScreen();
+        break;
 
       case AppRoutes.register:
-        return MaterialPageRoute(
-          builder: (_) => const RegisterScreen(),
-        );
+        page = const RegisterScreen();
+        break;
 
       case AppRoutes.interests:
-        return MaterialPageRoute(
-          builder: (_) => const InterestsScreen(),
-        );
+        page = const InterestsScreen();
+        break;
 
       case AppRoutes.home:
-        return MaterialPageRoute(
-          builder: (_) => const HomeScreen(),
-        );
+        page = const HomeScreen();
+        break;
 
       case AppRoutes.categories:
-        return MaterialPageRoute(
-          builder: (_) => const CategoriesScreen(),
-        );
+        page = const CategoriesScreen();
+        break;
 
       case AppRoutes.learningPaths:
-        return MaterialPageRoute(
-          builder: (_) => const LearningPathsScreen(),
+        page = LearningPathsScreen(
+          categoryId: settings.arguments as String?,
         );
+        break;
 
       case AppRoutes.learningPath:
-        return MaterialPageRoute(
-          builder: (_) => LearningPathScreen(
-            pathId: settings.arguments as String,
-          ),
+        page = LearningPathScreen(
+          pathId: settings.arguments as String,
         );
+        break;
 
       case AppRoutes.minute:
-        return MaterialPageRoute(
-          builder: (_) => MinuteScreen(
-            minuteId: settings.arguments as String,
-          ),
+        page = MinuteScreen(
+          minuteId: settings.arguments as String,
         );
+        break;
 
       case AppRoutes.quiz:
-        return MaterialPageRoute(
-          builder: (_) => QuizScreen(
-            minuteId: settings.arguments as String,
-          ),
+        page = QuizScreen(
+          minuteId: settings.arguments as String,
         );
+        break;
 
       case AppRoutes.recall:
-        return MaterialPageRoute(
-          builder: (_) => const RecallScreen(),
-        );
+        page = const RecallScreen();
+        break;
 
       case AppRoutes.progress:
-        return MaterialPageRoute(
-          builder: (_) => const ProgressScreen(),
-        );
+        page = const ProgressScreen();
+        break;
 
       case AppRoutes.profile:
-        return MaterialPageRoute(
-          builder: (_) => const ProfileScreen(),
-        );
+        page = const ProfileScreen();
+        break;
 
       case AppRoutes.editProfile:
-        return MaterialPageRoute(
-          builder: (_) => const EditProfileScreen(),
-        );
+        page = const EditProfileScreen();
+        break;
 
       case AppRoutes.changePassword:
-        return MaterialPageRoute(
-          builder: (_) => const ChangePasswordScreen(),
-        );
+        page = const ChangePasswordScreen();
+        break;
 
       default:
-        return MaterialPageRoute(
-          builder: (_) => const SplashScreen(),
-        );
+        page = const SplashScreen();
     }
+
+    return _buildRoute(
+      page,
+      settings,
+    );
+  }
+
+  static PageRouteBuilder<dynamic> _buildRoute(
+    Widget page,
+    RouteSettings settings,
+  ) {
+    return PageRouteBuilder<dynamic>(
+      settings: settings,
+      pageBuilder: (
+        context,
+        animation,
+        secondaryAnimation,
+      ) {
+        return page;
+      },
+      transitionsBuilder: (
+        context,
+        animation,
+        secondaryAnimation,
+        child,
+      ) {
+        final curvedAnimation = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
+
+        final slideAnimation = Tween<Offset>(
+          begin: const Offset(0.035, 0),
+          end: Offset.zero,
+        ).animate(curvedAnimation);
+
+        final fadeAnimation = Tween<double>(
+          begin: 0,
+          end: 1,
+        ).animate(curvedAnimation);
+
+        return FadeTransition(
+          opacity: fadeAnimation,
+          child: SlideTransition(
+            position: slideAnimation,
+            child: child,
+          ),
+        );
+      },
+      transitionDuration: const Duration(
+        milliseconds: 280,
+      ),
+      reverseTransitionDuration: const Duration(
+        milliseconds: 220,
+      ),
+    );
   }
 }

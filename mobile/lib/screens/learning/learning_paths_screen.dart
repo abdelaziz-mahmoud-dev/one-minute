@@ -36,6 +36,10 @@ class _LearningPathsScreenState extends State<LearningPathsScreen> {
   }
 
   Future<void> _changeLevel(String? level) async {
+    if (_selectedLevel == level) {
+      return;
+    }
+
     setState(() {
       _selectedLevel = level;
     });
@@ -44,6 +48,23 @@ class _LearningPathsScreenState extends State<LearningPathsScreen> {
           category: widget.categoryId,
           level: level,
         );
+  }
+
+  Future<void> _refresh() {
+    return context.read<LearningProvider>().loadPaths(
+          category: widget.categoryId,
+          level: _selectedLevel,
+        );
+  }
+
+  void _openPath(String pathId) {
+    if (pathId.isEmpty) return;
+
+    Navigator.pushNamed(
+      context,
+      AppRoutes.learningPath,
+      arguments: pathId,
+    );
   }
 
   @override
@@ -55,38 +76,58 @@ class _LearningPathsScreenState extends State<LearningPathsScreen> {
       body: Consumer<LearningProvider>(
         builder: (context, provider, _) {
           if (provider.isLoading && provider.paths.isEmpty) {
-            return const AppLoading(message: 'Loading paths...');
+            return const AppLoading(
+              message: 'Loading paths...',
+            );
           }
 
           if (provider.error != null && provider.paths.isEmpty) {
             return AppError(
               message: provider.error!,
-              onRetry: () => provider.loadPaths(
-                category: widget.categoryId,
-                level: _selectedLevel,
-              ),
+              onRetry: _refresh,
             );
           }
 
           return RefreshIndicator(
-            onRefresh: () => provider.loadPaths(
-              category: widget.categoryId,
-              level: _selectedLevel,
-            ),
+            onRefresh: _refresh,
             child: ListView(
-              padding: const EdgeInsets.all(20),
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
               children: [
-                Text(
-                  'Choose your path',
-                  style: AppTextStyles.headlineMedium,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Learn at your own pace, one minute at a time.',
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    color: AppColors.textSecondary,
+                TweenAnimationBuilder<double>(
+                  tween: Tween(
+                    begin: 0,
+                    end: 1,
+                  ),
+                  duration: const Duration(milliseconds: 450),
+                  curve: Curves.easeOutCubic,
+                  builder: (context, value, child) {
+                    return Opacity(
+                      opacity: value,
+                      child: Transform.translate(
+                        offset: Offset(0, 16 * (1 - value)),
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Choose your path',
+                        style: AppTextStyles.headlineMedium,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Learn at your own pace, one minute at a time.',
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
+
                 const SizedBox(height: 20),
 
                 SizedBox(
@@ -131,88 +172,32 @@ class _LearningPathsScreenState extends State<LearningPathsScreen> {
 
                 if (provider.paths.isEmpty)
                   const Padding(
-                    padding: EdgeInsets.only(top: 60),
+                    padding: EdgeInsets.only(top: 70),
                     child: Center(
-                      child: Text('No learning paths found.'),
-                    ),
-                  ),
-
-                ...provider.paths.map(
-                  (path) => Padding(
-                    padding: const EdgeInsets.only(bottom: 14),
-                    child: Card(
-                      child: InkWell(
-                        onTap: () {
-                          Navigator.pushNamed(
-                            context,
-                            AppRoutes.learningPath,
-                            arguments: path.id,
-                          );
-                        },
-                        borderRadius: BorderRadius.circular(16),
-                        child: Padding(
-                          padding: const EdgeInsets.all(18),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      path.title,
-                                      style: AppTextStyles.titleLarge,
-                                    ),
-                                  ),
-                                  _LevelBadge(level: path.level ?? ''),
-                                ],
-                              ),
-                              const SizedBox(height: 10),
-                              Text(
-                                path.description ?? '',
-                                maxLines: 3,
-                                overflow: TextOverflow.ellipsis,
-                                style: AppTextStyles.bodyMedium.copyWith(
-                                  color: AppColors.textSecondary,
-                                ),
-                              ),
-                              const SizedBox(height: 18),
-                              Row(
-                                children: [
-                                  const Icon(
-                                    Icons.menu_book_rounded,
-                                    size: 18,
-                                    color: AppColors.textSecondary,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    '${path.minuteCount} minutes',
-                                    style: AppTextStyles.bodySmall,
-                                  ),
-                                  const Spacer(),
-                                  Text(
-                                    '${path.completedMinutes}/${path.minuteCount}',
-                                    style: AppTextStyles.labelLarge.copyWith(
-                                      color: AppColors.primary,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              LinearProgressIndicator(
-                                value: path.minuteCount == 0
-                                    ? 0
-                                    : (path.completedMinutes /
-                                            path.minuteCount)
-                                        .clamp(0.0, 1.0),
-                                minHeight: 6,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                            ],
-                          ),
-                        ),
+                      child: Text(
+                        'No learning paths found.',
                       ),
                     ),
                   ),
+
+                ...List.generate(
+                  provider.paths.length,
+                  (index) {
+                    final path = provider.paths[index];
+
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 14),
+                      child: _AnimatedPathCard(
+                        index: index,
+                        title: path.title,
+                        description: path.description,
+                        level: path.level ?? '',
+                        minuteCount: path.minuteCount,
+                        completedMinutes: path.completedMinutes,
+                        onTap: () => _openPath(path.id),
+                      ),
+                    );
+                  },
                 ),
               ],
             ),
@@ -223,16 +208,146 @@ class _LearningPathsScreenState extends State<LearningPathsScreen> {
   }
 }
 
-class _LevelChip extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback onSelected;
+class _AnimatedPathCard extends StatelessWidget {
+  const _AnimatedPathCard({
+    required this.index,
+    required this.title,
+    required this.description,
+    required this.level,
+    required this.minuteCount,
+    required this.completedMinutes,
+    required this.onTap,
+  });
 
+  final int index;
+  final String title;
+  final String? description;
+  final String level;
+  final int minuteCount;
+  final int completedMinutes;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final progress = minuteCount == 0
+        ? 0.0
+        : (completedMinutes / minuteCount).clamp(0.0, 1.0);
+
+    return TweenAnimationBuilder<double>(
+      tween: Tween(
+        begin: 0,
+        end: 1,
+      ),
+      duration: Duration(
+        milliseconds: 400 + (index * 70),
+      ),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, child) {
+        return Opacity(
+          opacity: value,
+          child: Transform.translate(
+            offset: Offset(0, 18 * (1 - value)),
+            child: child,
+          ),
+        );
+      },
+      child: Card(
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: AppTextStyles.titleLarge,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    _LevelBadge(
+                      level: level,
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 10),
+
+                if (description != null &&
+                    description!.trim().isNotEmpty)
+                  Text(
+                    description!,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+
+                const SizedBox(height: 18),
+
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.menu_book_rounded,
+                      size: 18,
+                      color: AppColors.textSecondary,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      '$minuteCount minutes',
+                      style: AppTextStyles.bodySmall,
+                    ),
+                    const Spacer(),
+                    Text(
+                      '$completedMinutes/$minuteCount',
+                      style: AppTextStyles.labelLarge.copyWith(
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 9),
+
+                TweenAnimationBuilder<double>(
+                  tween: Tween(
+                    begin: 0,
+                    end: progress,
+                  ),
+                  duration: const Duration(milliseconds: 700),
+                  curve: Curves.easeOutCubic,
+                  builder: (context, value, child) {
+                    return LinearProgressIndicator(
+                      value: value,
+                      minHeight: 6,
+                      borderRadius: BorderRadius.circular(10),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LevelChip extends StatelessWidget {
   const _LevelChip({
     required this.label,
     required this.selected,
     required this.onSelected,
   });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -242,7 +357,9 @@ class _LevelChip extends StatelessWidget {
       onSelected: (_) => onSelected(),
       selectedColor: AppColors.primaryLight,
       labelStyle: TextStyle(
-        color: selected ? AppColors.primary : AppColors.textSecondary,
+        color: selected
+            ? AppColors.primary
+            : AppColors.textSecondary,
         fontWeight: FontWeight.w600,
       ),
     );
@@ -250,11 +367,11 @@ class _LevelChip extends StatelessWidget {
 }
 
 class _LevelBadge extends StatelessWidget {
-  final String level;
-
   const _LevelBadge({
     required this.level,
   });
+
+  final String level;
 
   @override
   Widget build(BuildContext context) {

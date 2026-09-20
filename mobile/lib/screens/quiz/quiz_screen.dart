@@ -18,11 +18,43 @@ class QuizScreen extends StatefulWidget {
   State<QuizScreen> createState() => _QuizScreenState();
 }
 
-class _QuizScreenState extends State<QuizScreen> {
+class _QuizScreenState extends State<QuizScreen>
+    with SingleTickerProviderStateMixin {
   int? _selectedIndex;
+
   bool _submitted = false;
   bool _isCorrect = false;
   String? _resultMessage;
+
+  late final AnimationController _resultController;
+  late final Animation<double> _resultScale;
+  late final Animation<double> _resultFade;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _resultController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 350),
+    );
+
+    _resultScale = CurvedAnimation(
+      parent: _resultController,
+      curve: Curves.easeOutBack,
+    );
+
+    _resultFade = CurvedAnimation(
+      parent: _resultController,
+      curve: Curves.easeOut,
+    );
+  }
+
+  @override
+  void dispose() {
+    _resultController.dispose();
+    super.dispose();
+  }
 
   Future<void> _submitAnswer() async {
     if (_selectedIndex == null || _submitted) {
@@ -68,32 +100,41 @@ class _QuizScreenState extends State<QuizScreen> {
     }
 
     final isCorrect = result['correct'] == true;
-    final completed = result['completed'] == true;
 
     setState(() {
       _isCorrect = isCorrect;
       _resultMessage = result['message']?.toString();
     });
 
+    _resultController.forward(from: 0);
+
     if (!isCorrect) {
       return;
     }
 
-    if (completed) {
-      learningProvider.updateCurrentMinuteCompletion(
-        completed: true,
-      );
-    }
-
     await Future.delayed(
-      const Duration(milliseconds: 1200),
+      const Duration(milliseconds: 1400),
     );
 
     if (!mounted) {
       return;
     }
 
-    Navigator.of(context).pop();
+    Navigator.of(context).pop(true);
+  }
+
+  void _tryAgain() {
+    if (_isCorrect) {
+      return;
+    }
+
+    _resultController.reset();
+
+    setState(() {
+      _submitted = false;
+      _selectedIndex = null;
+      _resultMessage = null;
+    });
   }
 
   @override
@@ -120,156 +161,186 @@ class _QuizScreenState extends State<QuizScreen> {
       appBar: AppBar(
         title: const Text('Quick Quiz'),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Test yourself',
-              style: AppTextStyles.headlineMedium,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Answer correctly to complete this minute and earn XP.',
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: AppColors.textSecondary,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(
+            20,
+            20,
+            20,
+            32,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Test yourself',
+                style: AppTextStyles.headlineMedium,
               ),
-            ),
-            const SizedBox(height: 28),
-
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Text(
-                  question,
-                  style: AppTextStyles.titleLarge.copyWith(
-                    height: 1.4,
-                  ),
+              const SizedBox(height: 8),
+              Text(
+                'Answer correctly to complete this minute and earn XP.',
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.textSecondary,
                 ),
               ),
-            ),
+              const SizedBox(height: 28),
 
-            const SizedBox(height: 20),
-
-            ...minute.options.asMap().entries.map(
-              (entry) => Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: _AnswerOption(
-                  text: entry.value,
-                  selected: _selectedIndex == entry.key,
-                  enabled: !_submitted,
-                  onTap: () {
-                    setState(() {
-                      _selectedIndex = entry.key;
-                    });
-                  },
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 12),
-
-            if (_submitted) ...[
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  color: _isCorrect
-                      ? AppColors.success.withValues(alpha: 0.1)
-                      : AppColors.error.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: _isCorrect
-                        ? AppColors.success
-                        : AppColors.error,
-                  ),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      _isCorrect
-                          ? Icons.check_circle_rounded
-                          : Icons.cancel_rounded,
-                      color: _isCorrect
-                          ? AppColors.success
-                          : AppColors.error,
+              // Question
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Text(
+                    question,
+                    style: AppTextStyles.titleLarge.copyWith(
+                      height: 1.4,
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        _resultMessage ??
-                            (_isCorrect
-                                ? 'Correct! Great job.'
-                                : 'Not quite. Keep learning!'),
-                        style: AppTextStyles.bodyMedium,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
 
               const SizedBox(height: 20),
-            ],
 
-            SizedBox(
-              width: double.infinity,
-              height: 54,
-              child: ElevatedButton(
-                onPressed: _selectedIndex == null ||
-                        progressProvider.isSubmitting ||
-                        (_submitted && _isCorrect)
-                    ? null
-                    : _submitAnswer,
-                child: progressProvider.isSubmitting
-                    ? const SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                        ),
-                      )
-                    : Text(
-                        _submitted
-                            ? (_isCorrect
-                                ? 'Completed'
-                                : 'Try again')
-                            : 'Submit answer',
-                      ),
-              ),
-            ),
+              // Answers
+              ...minute.options.asMap().entries.map(
+                (entry) => Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _AnswerOption(
+                    text: entry.value,
+                    selected: _selectedIndex == entry.key,
+                    enabled: !_submitted,
+                    onTap: () {
+                      if (_submitted) {
+                        return;
+                      }
 
-            if (_submitted && !_isCorrect) ...[
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                height: 46,
-                child: OutlinedButton(
-                  onPressed: () {
-                    setState(() {
-                      _submitted = false;
-                      _selectedIndex = null;
-                      _resultMessage = null;
-                    });
-                  },
-                  child: const Text('Try again'),
+                      setState(() {
+                        _selectedIndex = entry.key;
+                      });
+                    },
+                  ),
                 ),
               ),
+
+              const SizedBox(height: 8),
+
+              // Result
+              if (_submitted)
+                FadeTransition(
+                  opacity: _resultFade,
+                  child: ScaleTransition(
+                    scale: _resultScale,
+                    child: _ResultCard(
+                      isCorrect: _isCorrect,
+                      message: _resultMessage ??
+                          (_isCorrect
+                              ? 'Correct! Great job.'
+                              : 'Not quite. Keep learning!'),
+                    ),
+                  ),
+                ),
+
+              if (_submitted)
+                const SizedBox(height: 20),
+
+              // Main action
+              SizedBox(
+                width: double.infinity,
+                height: 54,
+                child: ElevatedButton(
+                  onPressed: _selectedIndex == null ||
+                          progressProvider.isSubmitting ||
+                          (_submitted && _isCorrect)
+                      ? null
+                      : (_submitted
+                          ? _tryAgain
+                          : _submitAnswer),
+                  child: progressProvider.isSubmitting
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : Text(
+                          _submitted
+                              ? (_isCorrect
+                                  ? 'Completed'
+                                  : 'Try again')
+                              : 'Submit answer',
+                        ),
+                ),
+              ),
+
+              if (_submitted && !_isCorrect) ...[
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  height: 46,
+                  child: OutlinedButton(
+                    onPressed: _tryAgain,
+                    child: const Text('Choose another answer'),
+                  ),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _AnswerOption extends StatelessWidget {
-  final String text;
-  final bool selected;
-  final bool enabled;
-  final VoidCallback onTap;
+class _ResultCard extends StatelessWidget {
+  const _ResultCard({
+    required this.isCorrect,
+    required this.message,
+  });
 
+  final bool isCorrect;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final color =
+        isCorrect ? AppColors.success : AppColors.error;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: color,
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            isCorrect
+                ? Icons.check_circle_rounded
+                : Icons.cancel_rounded,
+            color: color,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              message,
+              style: AppTextStyles.bodyMedium.copyWith(
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AnswerOption extends StatelessWidget {
   const _AnswerOption({
     required this.text,
     required this.selected,
@@ -277,61 +348,71 @@ class _AnswerOption extends StatelessWidget {
     required this.onTap,
   });
 
+  final String text;
+  final bool selected;
+  final bool enabled;
+  final VoidCallback onTap;
+
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: selected
-          ? AppColors.primaryLight
-          : AppColors.surface,
-      borderRadius: BorderRadius.circular(14),
-      child: InkWell(
-        onTap: enabled ? onTap : null,
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOut,
+      child: Material(
+        color: selected
+            ? AppColors.primaryLight
+            : AppColors.surface,
         borderRadius: BorderRadius.circular(14),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: selected
-                  ? AppColors.primary
-                  : AppColors.border,
-              width: selected ? 1.5 : 1,
+        child: InkWell(
+          onTap: enabled ? onTap : null,
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: selected
+                    ? AppColors.primary
+                    : AppColors.border,
+                width: selected ? 1.5 : 1,
+              ),
             ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 22,
-                height: 22,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
+            child: Row(
+              children: [
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  width: 22,
+                  height: 22,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: selected
+                          ? AppColors.primary
+                          : AppColors.textSecondary,
+                      width: 2,
+                    ),
                     color: selected
                         ? AppColors.primary
-                        : AppColors.textSecondary,
-                    width: 2,
+                        : Colors.transparent,
                   ),
-                  color: selected
-                      ? AppColors.primary
-                      : Colors.transparent,
+                  child: selected
+                      ? const Icon(
+                          Icons.check,
+                          size: 14,
+                          color: Colors.white,
+                        )
+                      : null,
                 ),
-                child: selected
-                    ? const Icon(
-                        Icons.check,
-                        size: 14,
-                        color: Colors.white,
-                      )
-                    : null,
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Text(
-                  text,
-                  style: AppTextStyles.bodyLarge,
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    text,
+                    style: AppTextStyles.bodyLarge,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

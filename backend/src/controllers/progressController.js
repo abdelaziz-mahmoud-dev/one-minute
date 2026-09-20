@@ -28,43 +28,67 @@ const getProgress = async (req, res) => {
 
   const skip = (page - 1) * limit;
 
-  const [progress, total, user] =
-    await Promise.all([
-      UserProgress.find({
-        user: req.user._id
+  const userId = req.user._id;
+
+  const [
+    progress,
+    total,
+    completedMinutes,
+    user
+  ] = await Promise.all([
+    UserProgress.find({
+      user: userId
+    })
+      .populate(
+        "minute",
+        "title slug category learningPath xpReward"
+      )
+      .sort({
+        completedAt: -1,
+        updatedAt: -1
       })
-        .populate(
-          "minute",
-          "title slug category learningPath xpReward"
-        )
-        .sort({ completedAt: -1 })
-        .skip(skip)
-        .limit(limit),
+      .skip(skip)
+      .limit(limit),
 
-      UserProgress.countDocuments({
-        user: req.user._id
-      }),
+    UserProgress.countDocuments({
+      user: userId
+    }),
 
-      User.findById(req.user._id)
-    ]);
+    UserProgress.countDocuments({
+      user: userId,
+      completed: true
+    }),
+
+    User.findById(userId).select(
+      "xp level streak"
+    )
+  ]);
+
+  if (!user) {
+    return res.status(404).json({
+      success: false,
+      message: "User not found"
+    });
+  }
 
   res.status(200).json({
     success: true,
     data: {
-      xp: user.xp,
-      level: user.level,
-      streak: user.streak,
-      nextLevelXp: getNextLevelXp(user.level),
-      completedMinutes: await UserProgress.countDocuments({
-        user: req.user._id,
-        completed: true
-      }),
+      summary: {
+        xp: user.xp,
+        level: user.level,
+        streak: user.streak,
+        nextLevelXp: getNextLevelXp(user.level),
+        completedMinutes
+      },
+
       pagination: {
         page,
         limit,
         total,
         totalPages: Math.ceil(total / limit)
       },
+
       progress
     }
   });
@@ -79,7 +103,9 @@ const getMyProgress = async (req, res) => {
       "minute",
       "title slug category learningPath xpReward"
     )
-    .sort({ completedAt: -1 });
+    .sort({
+      completedAt: -1
+    });
 
   res.status(200).json({
     success: true,
@@ -124,35 +150,96 @@ const answerMinute = async (req, res) => {
     });
   }
 
-  let progress = await UserProgress.findOne({
-    user: req.user._id,
-    minute: minute._id
-  });
-
-  if (!progress) {
-    progress = new UserProgress({
-      user: req.user._id,
-      minute: minute._id
-    });
-  }
-
-  progress.attempts += 1;
-
+  const userId = req.user._id;
   const isCorrect =
     answer === minute.question.correctAnswer;
 
-  progress.correct = isCorrect;
+  /*
+   * Make sure the progress document exists.
+   *
+   * The unique index on { user, minute } protects us
+   * from having more than one progress document.
+   */
+  await UserProgress.updateOne(
+    {
+      user: userId,
+      minute: minute._id
+    },
+    {
+      $setOnInsert: {
+        user: userId,
+        minute: minute._id
+      }
+    },
+    {
+      upsert: true
+    }
+  );
 
-  let earnedXp = 0;
+  /*
+   * Every answer counts as an attempt.
+   *
+   * If the answer is wrong, only attempts/correct change.
+   *
+   * If the answer is correct AND the minute was not
+   * completed before, this atomic update is the gate
+   * that decides who gets the XP.
+   */
+  const progressUpdate = {
+    $inc: {
+      attempts: 1
+    },
+    $set: {
+      correct: isCorrect
+    }
+  };
 
-  if (isCorrect && !progress.completed) {
-    progress.completed = true;
-    progress.completedAt = new Date();
-    progress.xpEarned = minute.xpReward;
+  if (isCorrect) {
+    progressUpdate.$set.completed = true;
+    progressUpdate.$set.completedAt = new Date();
+    progressUpdate.$set.xpEarned =
+      minute.xpReward;
+  }
 
-    earnedXp = minute.xpReward;
+  const updatedProgress =
+    await UserProgress.findOneAndUpdate(
+      {
+        user: userId,
+        minute: minute._id,
+        ...(isCorrect
+          ? {
+              completed: false
+            }
+          : {})
+      },
+      progressUpdate,
+      {
+        new: true
+      }
+    );
 
-    const user = await User.findById(req.user._id);
+  /*
+   * If the correct answer was submitted after another
+   * request already completed the minute, updatedProgress
+   * will be null.
+   *
+   * Therefore XP can only be awarded by the request
+   * that actually changed completed from false → true.
+   */
+  const newlyCompleted =
+    isCorrect && updatedProgress !== null;
+
+  let user = null;
+
+  if (newlyCompleted) {
+    user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found"
+      });
+    }
 
     user.xp += minute.xpReward;
     user.level = calculateLevel(user.xp);
@@ -162,12 +249,30 @@ const answerMinute = async (req, res) => {
     await user.save();
 
     await createRecallForMinute(
-      req.user._id,
+      userId,
       minute._id
     );
   }
 
-  await progress.save();
+  const progress =
+    updatedProgress ??
+    await UserProgress.findOne({
+      user: userId,
+      minute: minute._id
+    });
+
+  if (!progress) {
+    return res.status(500).json({
+      success: false,
+      message: "Unable to update progress"
+    });
+  }
+
+  if (!user && newlyCompleted === false) {
+    user = await User.findById(userId).select(
+      "xp level streak"
+    );
+  }
 
   res.status(200).json({
     success: true,
@@ -175,11 +280,14 @@ const answerMinute = async (req, res) => {
       correct: isCorrect,
       completed: progress.completed,
       attempts: progress.attempts,
-      xpEarned: earnedXp,
-      totalXp: progress.completed
-        ? (await User.findById(req.user._id)).xp
-        : undefined,
-      explanation: minute.question.explanation
+      xpEarned: newlyCompleted
+        ? minute.xpReward
+        : 0,
+      totalXp: user?.xp,
+      level: user?.level,
+      streak: user?.streak,
+      explanation:
+        minute.question.explanation
     }
   });
 };

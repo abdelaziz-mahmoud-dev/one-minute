@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/theme/app_colors.dart';
-import '../../core/theme/app_text_styles.dart';
 import '../../core/widgets/app_error.dart';
 import '../../core/widgets/app_loading.dart';
 import '../../providers/auth_provider.dart';
@@ -14,9 +12,7 @@ import 'widgets/streak_card.dart';
 import 'widgets/welcome_header.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({
-    super.key,
-  });
+  const HomeScreen({super.key});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -30,19 +26,40 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
       context.read<HomeProvider>().loadHome();
     });
   }
 
-  void _onNavigationTap(int index) {
-    if (index == _currentIndex) {
+  Future<void> _openDailyMinute() async {
+    final minute = context.read<HomeProvider>().dailyMinute;
+
+    if (minute == null || minute.id.isEmpty) {
       return;
     }
 
-    setState(() {
-      _currentIndex = index;
-    });
+    final result = await Navigator.of(context).pushNamed(
+      AppRoutes.minute,
+      arguments: minute.id,
+    );
+
+    if (!mounted) return;
+
+    if (result == true) {
+      await context.read<HomeProvider>().refresh();
+    }
+  }
+
+  Future<void> _refresh() async {
+    await context.read<HomeProvider>().refresh();
+  }
+
+  void _onNavigationChanged(int index) {
+    if (index == 0) {
+      setState(() {
+        _currentIndex = 0;
+      });
+      return;
+    }
 
     switch (index) {
       case 1:
@@ -65,33 +82,13 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _refresh() async {
-    await context.read<HomeProvider>().refresh();
-  }
-
-  void _openDailyMinute() {
-    final minute = context.read<HomeProvider>().dailyMinute;
-
-    if (minute == null || minute.id.isEmpty) {
-      return;
-    }
-
-    Navigator.of(context).pushNamed(
-      AppRoutes.minute,
-      arguments: minute.id,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    final auth = context.watch<AuthProvider>();
+    final user = context.watch<AuthProvider>().user;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text('One Minute'),
-        backgroundColor: AppColors.background,
-        surfaceTintColor: Colors.transparent,
         actions: [
           IconButton(
             tooltip: 'Recall',
@@ -101,137 +98,136 @@ class _HomeScreenState extends State<HomeScreen> {
               );
             },
             icon: const Icon(
-              Icons.psychology_alt_outlined,
+              Icons.psychology_rounded,
             ),
           ),
-          const SizedBox(width: 6),
         ],
       ),
       body: Consumer<HomeProvider>(
         builder: (context, home, _) {
           if (home.isLoading && home.dashboard == null) {
-            return const AppLoading();
+            return const AppLoading(
+              message: 'Loading your day...',
+            );
           }
 
           if (home.error != null && home.dashboard == null) {
             return AppError(
               message: home.error!,
-              onRetry: _refresh,
+              onRetry: home.loadHome,
             );
           }
 
           final dashboard = home.dashboard;
 
           if (dashboard == null) {
-            return AppError(
-              message: 'Unable to load your dashboard.',
-              onRetry: _refresh,
+            return const Center(
+              child: Text(
+                'Unable to load your dashboard.',
+              ),
             );
           }
 
           return RefreshIndicator(
-            color: AppColors.primary,
-            backgroundColor: AppColors.surface,
             onRefresh: _refresh,
-            child: CustomScrollView(
-              physics: const AlwaysScrollableScrollPhysics(
-                parent: BouncingScrollPhysics(),
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(
+                20,
+                16,
+                20,
+                32,
               ),
-              slivers: [
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(
-                    20,
-                    10,
-                    20,
-                    32,
-                  ),
-                  sliver: SliverList(
-                    delegate: SliverChildListDelegate(
-                      [
-                        _AnimatedSection(
-                          delay: 0,
-                          child: WelcomeHeader(
-                            user: auth.user,
-                          ),
-                        ),
-
-                        const SizedBox(height: 22),
-
-                        _AnimatedSection(
-                          delay: 60,
-                          child: StreakCard(
-                            dashboard: dashboard,
-                          ),
-                        ),
-
-                        const SizedBox(height: 24),
-
-                        _SectionHeader(
-                          title: 'Today',
-                          subtitle: 'Make your minute count',
-                        ),
-
-                        const SizedBox(height: 12),
-
-                        _AnimatedSection(
-                          delay: 120,
-                          child: DailyMinuteCard(
-                            minute: home.dailyMinute,
-                            onPressed: _openDailyMinute,
-                          ),
-                        ),
-
-                        const SizedBox(height: 24),
-
-                        _SectionHeader(
-                          title: 'Your progress',
-                          subtitle: 'Keep building momentum',
-                        ),
-
-                        const SizedBox(height: 12),
-
-                        _AnimatedSection(
-                          delay: 180,
-                          child: ProgressCard(
-                            dashboard: dashboard,
-                          ),
-                        ),
-
-                        const SizedBox(height: 24),
-
-                        _SectionHeader(
-                          title: 'Quick actions',
-                          subtitle: 'Jump back into learning',
-                        ),
-
-                        const SizedBox(height: 12),
-
-                        _AnimatedSection(
-                          delay: 240,
-                          child: _QuickActions(
-                            onLearning: () {
-                              Navigator.of(context).pushNamed(
-                                AppRoutes.categories,
-                              );
-                            },
-                            onRecall: () {
-                              Navigator.of(context).pushNamed(
-                                AppRoutes.recall,
-                              );
-                            },
-                          ),
-                        ),
-
-                        if (home.error != null) ...[
-                          const SizedBox(height: 14),
-                          _InlineError(
-                            message: home.error!,
-                          ),
-                        ],
-                      ],
-                    ),
+              children: [
+                _AnimatedSection(
+                  delay: 0,
+                  child: WelcomeHeader(
+                    user: user,
                   ),
                 ),
+
+                const SizedBox(height: 18),
+
+                _AnimatedSection(
+                  delay: 60,
+                  child: StreakCard(
+                    dashboard: dashboard,
+                  ),
+                ),
+
+                const SizedBox(height: 22),
+
+                const _SectionHeader(
+                  title: 'Today',
+                  icon: Icons.today_rounded,
+                ),
+
+                const SizedBox(height: 12),
+
+                _AnimatedSection(
+                  delay: 120,
+                  child: DailyMinuteCard(
+                    minute: home.dailyMinute,
+                    onPressed: _openDailyMinute,
+                  ),
+                ),
+
+                if (home.dailyError != null) ...[
+                  const SizedBox(height: 10),
+                  _InlineError(
+                    message: home.dailyError!,
+                    onRetry: _refresh,
+                  ),
+                ],
+
+                const SizedBox(height: 24),
+
+                const _SectionHeader(
+                  title: 'Your progress',
+                  icon: Icons.trending_up_rounded,
+                ),
+
+                const SizedBox(height: 12),
+
+                _AnimatedSection(
+                  delay: 180,
+                  child: ProgressCard(
+                    dashboard: dashboard,
+                  ),
+                ),
+
+                const SizedBox(height: 24),
+
+                const _SectionHeader(
+                  title: 'Quick actions',
+                  icon: Icons.bolt_rounded,
+                ),
+
+                const SizedBox(height: 12),
+
+                _AnimatedSection(
+                  delay: 240,
+                  child: _QuickActions(
+                    onExplore: () {
+                      Navigator.of(context).pushNamed(
+                        AppRoutes.categories,
+                      );
+                    },
+                    onRecall: () {
+                      Navigator.of(context).pushNamed(
+                        AppRoutes.recall,
+                      );
+                    },
+                  ),
+                ),
+
+                if (home.error != null) ...[
+                  const SizedBox(height: 16),
+                  _InlineError(
+                    message: home.error!,
+                    onRetry: _refresh,
+                  ),
+                ],
               ],
             ),
           );
@@ -239,7 +235,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
-        onDestinationSelected: _onNavigationTap,
+        onDestinationSelected: _onNavigationChanged,
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.home_outlined),
@@ -247,8 +243,8 @@ class _HomeScreenState extends State<HomeScreen> {
             label: 'Home',
           ),
           NavigationDestination(
-            icon: Icon(Icons.menu_book_outlined),
-            selectedIcon: Icon(Icons.menu_book_rounded),
+            icon: Icon(Icons.explore_outlined),
+            selectedIcon: Icon(Icons.explore_rounded),
             label: 'Learn',
           ),
           NavigationDestination(
@@ -270,40 +266,74 @@ class _HomeScreenState extends State<HomeScreen> {
 class _SectionHeader extends StatelessWidget {
   const _SectionHeader({
     required this.title,
-    required this.subtitle,
+    required this.icon,
   });
 
   final String title;
-  final String subtitle;
+  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Row(
       children: [
+        Icon(
+          icon,
+          size: 20,
+        ),
+        const SizedBox(width: 8),
         Text(
           title,
-          style: AppTextStyles.titleLarge,
-        ),
-        const SizedBox(height: 2),
-        Text(
-          subtitle,
-          style: AppTextStyles.bodySmall.copyWith(
-            color: AppColors.textSecondary,
-          ),
+          style: Theme.of(context).textTheme.titleLarge,
         ),
       ],
     );
   }
 }
 
+class _AnimatedSection extends StatelessWidget {
+  const _AnimatedSection({
+    required this.child,
+    required this.delay,
+  });
+
+  final Widget child;
+  final int delay;
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(
+        begin: 0,
+        end: 1,
+      ),
+      duration: Duration(
+        milliseconds: 450 + delay,
+      ),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, child) {
+        return Opacity(
+          opacity: value,
+          child: Transform.translate(
+            offset: Offset(
+              0,
+              18 * (1 - value),
+            ),
+            child: child,
+          ),
+        );
+      },
+      child: child,
+    );
+  }
+}
+
 class _QuickActions extends StatelessWidget {
   const _QuickActions({
-    required this.onLearning,
+    required this.onExplore,
     required this.onRecall,
   });
 
-  final VoidCallback onLearning;
+  final VoidCallback onExplore;
   final VoidCallback onRecall;
 
   @override
@@ -314,8 +344,8 @@ class _QuickActions extends StatelessWidget {
           child: _QuickActionCard(
             icon: Icons.explore_rounded,
             title: 'Explore',
-            subtitle: 'Find a learning path',
-            onTap: onLearning,
+            subtitle: 'Find something new',
+            onTap: onExplore,
           ),
         ),
         const SizedBox(width: 12),
@@ -323,7 +353,7 @@ class _QuickActions extends StatelessWidget {
           child: _QuickActionCard(
             icon: Icons.psychology_rounded,
             title: 'Recall',
-            subtitle: 'Test your memory',
+            subtitle: 'Review what you learned',
             onTap: onRecall,
           ),
         ),
@@ -347,47 +377,28 @@ class _QuickActionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.surface,
-      borderRadius: BorderRadius.circular(18),
+    return Card(
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: Container(
+        child: Padding(
           padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color: AppColors.border,
-            ),
-          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: AppColors.primaryLight,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  icon,
-                  color: AppColors.primary,
-                  size: 23,
-                ),
+              Icon(
+                icon,
+                size: 28,
               ),
               const SizedBox(height: 14),
               Text(
                 title,
-                style: AppTextStyles.titleMedium,
+                style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 4),
               Text(
                 subtitle,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: AppTextStyles.bodySmall,
+                style: Theme.of(context).textTheme.bodySmall,
               ),
             ],
           ),
@@ -400,65 +411,41 @@ class _QuickActionCard extends StatelessWidget {
 class _InlineError extends StatelessWidget {
   const _InlineError({
     required this.message,
+    required this.onRetry,
   });
 
   final String message;
+  final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.error.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: AppColors.error.withValues(alpha: 0.15),
-        ),
+        color: Theme.of(context).colorScheme.errorContainer,
+        borderRadius: BorderRadius.circular(14),
       ),
-      child: Text(
-        message,
-        style: AppTextStyles.bodySmall.copyWith(
-          color: AppColors.error,
-        ),
-      ),
-    );
-  }
-}
-
-class _AnimatedSection extends StatelessWidget {
-  const _AnimatedSection({
-    required this.child,
-    required this.delay,
-  });
-
-  final Widget child;
-  final int delay;
-
-  @override
-  Widget build(BuildContext context) {
-    return TweenAnimationBuilder<double>(
-      tween: Tween(
-        begin: 0,
-        end: 1,
-      ),
-      duration: Duration(
-        milliseconds: 350 + delay,
-      ),
-      curve: Curves.easeOutCubic,
-      builder: (context, value, child) {
-        return Opacity(
-          opacity: value,
-          child: Transform.translate(
-            offset: Offset(
-              0,
-              14 * (1 - value),
-            ),
-            child: child,
+      child: Row(
+        children: [
+          Icon(
+            Icons.error_outline_rounded,
+            color: Theme.of(context).colorScheme.onErrorContainer,
           ),
-        );
-      },
-      child: child,
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onErrorContainer,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: onRetry,
+            child: const Text('Retry'),
+          ),
+        ],
+      ),
     );
   }
 }

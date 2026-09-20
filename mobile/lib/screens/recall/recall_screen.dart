@@ -8,14 +8,17 @@ import '../../core/widgets/app_loading.dart';
 import '../../providers/recall_provider.dart';
 
 class RecallScreen extends StatefulWidget {
-  const RecallScreen({super.key});
+  const RecallScreen({
+    super.key,
+  });
 
   @override
-  State<RecallScreen> createState() => _RecallScreenState();
+  State<RecallScreen> createState() =>
+      _RecallScreenState();
 }
 
 class _RecallScreenState extends State<RecallScreen> {
-  final Map<String, String> _answers = {};
+  final Map<String, int> _selectedScores = {};
   final Set<String> _submitted = {};
 
   @override
@@ -23,37 +26,46 @@ class _RecallScreenState extends State<RecallScreen> {
     super.initState();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+
       context.read<RecallProvider>().loadRecall();
     });
   }
 
-  Future<void> _submitAnswer(
-    String recallId,
-    String answer,
-  ) async {
-    if (_submitted.contains(recallId)) return;
+  Future<void> _submitAnswer({
+    required String recallId,
+    required int score,
+  }) async {
+    if (_submitted.contains(recallId)) {
+      return;
+    }
 
     final provider = context.read<RecallProvider>();
 
-    try {
-      await provider.answerRecall(recallId: recallId, answer: answer);
+    final success = await provider.answerRecall(
+      recallId: recallId,
+      score: score,
+    );
 
-      if (!mounted) return;
+    if (!mounted) return;
 
-      setState(() {
-        _submitted.add(recallId);
-      });
-    } catch (_) {
-      if (!mounted) return;
-
+    if (!success) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            provider.error ?? 'Unable to submit answer.',
+            provider.error ??
+                'Unable to update your recall.',
           ),
+          backgroundColor: AppColors.error,
         ),
       );
+
+      return;
     }
+
+    setState(() {
+      _submitted.add(recallId);
+    });
   }
 
   @override
@@ -64,13 +76,15 @@ class _RecallScreenState extends State<RecallScreen> {
       ),
       body: Consumer<RecallProvider>(
         builder: (context, provider, _) {
-          if (provider.isLoading && provider.items.isEmpty) {
+          if (provider.isLoading &&
+              provider.items.isEmpty) {
             return const AppLoading(
               message: 'Loading your recall items...',
             );
           }
 
-          if (provider.error != null && provider.items.isEmpty) {
+          if (provider.error != null &&
+              provider.items.isEmpty) {
             return AppError(
               message: provider.error!,
               onRetry: provider.loadRecall,
@@ -78,10 +92,38 @@ class _RecallScreenState extends State<RecallScreen> {
           }
 
           if (provider.items.isEmpty) {
-            return const Center(
-              child: Text(
-                'Nothing to review right now.\nCome back after learning a few minutes.',
-                textAlign: TextAlign.center,
+            return RefreshIndicator(
+              onRefresh: provider.loadRecall,
+              child: ListView(
+                physics:
+                    const AlwaysScrollableScrollPhysics(),
+                children: [
+                  SizedBox(
+                    height:
+                        MediaQuery.of(context).size.height *
+                            0.3,
+                  ),
+                  const Icon(
+                    Icons.psychology_outlined,
+                    size: 64,
+                    color: AppColors.textSecondary,
+                  ),
+                  const SizedBox(height: 20),
+                  const Text(
+                    'Nothing to review right now.',
+                    textAlign: TextAlign.center,
+                    style: AppTextStyles.titleLarge,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Come back after learning a few minutes.',
+                    textAlign: TextAlign.center,
+                    style:
+                        AppTextStyles.bodyMedium.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
               ),
             );
           }
@@ -97,70 +139,151 @@ class _RecallScreenState extends State<RecallScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'A quick review helps turn what you learned into long-term memory.',
-                  style: AppTextStyles.bodyMedium.copyWith(
+                  'Review what you learned and tell us how well you remembered it.',
+                  style:
+                      AppTextStyles.bodyMedium.copyWith(
                     color: AppColors.textSecondary,
                   ),
                 ),
                 const SizedBox(height: 24),
                 ...provider.items.map(
                   (item) {
-                    final selected = _answers[item.id];
-                    final submitted = _submitted.contains(item.id);
+                    final selectedScore =
+                        _selectedScores[item.id];
+
+                    final submitted =
+                        _submitted.contains(item.id);
 
                     return Padding(
-                      padding: const EdgeInsets.only(bottom: 18),
+                      padding:
+                          const EdgeInsets.only(bottom: 18),
                       child: Card(
                         child: Padding(
-                          padding: const EdgeInsets.all(18),
+                          padding:
+                              const EdgeInsets.all(18),
                           child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                            crossAxisAlignment:
+                                CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                item.minuteTitle ?? '',
-                                style: AppTextStyles.labelLarge.copyWith(
-                                  color: AppColors.primary,
+                              if (item.minuteTitle != null &&
+                                  item.minuteTitle!
+                                      .isNotEmpty)
+                                Text(
+                                  item.minuteTitle!,
+                                  style: AppTextStyles
+                                      .labelLarge
+                                      .copyWith(
+                                    color:
+                                        AppColors.primary,
+                                  ),
                                 ),
-                              ),
+
                               const SizedBox(height: 12),
+
                               Text(
                                 item.question,
-                                style: AppTextStyles.titleMedium,
+                                style:
+                                    AppTextStyles.titleMedium,
                               ),
+
+                              const SizedBox(height: 20),
+
+                              Text(
+                                submitted
+                                    ? 'Reviewed'
+                                    : 'How well did you remember?',
+                                style: AppTextStyles
+                                    .labelLarge,
+                              ),
+
+                              const SizedBox(height: 12),
+
+                              _RecallScale(
+                                selectedScore:
+                                    selectedScore,
+                                enabled: !submitted &&
+                                    !provider.isSubmitting,
+                                onSelected: (score) {
+                                  setState(() {
+                                    _selectedScores[
+                                        item.id] = score;
+                                  });
+                                },
+                              ),
+
                               const SizedBox(height: 16),
-                              ...item.options.map(
-                                (option) => Padding(
-                                  padding: const EdgeInsets.only(bottom: 8),
-                                  child: _RecallOption(
-                                    text: option,
-                                    selected: selected == option,
-                                    enabled: !submitted,
-                                    onTap: () {
-                                      setState(() {
-                                        _answers[item.id] = option;
-                                      });
-                                    },
+
+                              if (selectedScore != null &&
+                                  !submitted)
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 48,
+                                  child: ElevatedButton(
+                                    onPressed:
+                                        provider.isSubmitting
+                                            ? null
+                                            : () =>
+                                                _submitAnswer(
+                                                  recallId:
+                                                      item.id,
+                                                  score:
+                                                      selectedScore,
+                                                ),
+                                    child:
+                                        provider.isSubmitting
+                                            ? const SizedBox(
+                                                width: 20,
+                                                height: 20,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                  strokeWidth:
+                                                      2,
+                                                ),
+                                              )
+                                            : const Text(
+                                                'Save review',
+                                              ),
                                   ),
                                 ),
-                              ),
-                              const SizedBox(height: 8),
-                              SizedBox(
-                                width: double.infinity,
-                                height: 46,
-                                child: OutlinedButton(
-                                  onPressed: selected == null || submitted
-                                      ? null
-                                      : () => _submitAnswer(
-                                            item.id,
-                                            selected,
-                                          ),
-                                  child: Text(
-                                    submitted
-                                        ? 'Reviewed'
-                                        : 'Check answer',
+
+                              if (submitted)
+                                Container(
+                                  width: double.infinity,
+                                  padding:
+                                      const EdgeInsets.all(
+                                    12,
+                                  ),
+                                  decoration:
+                                      BoxDecoration(
+                                    color: AppColors.success
+                                        .withValues(
+                                      alpha: 0.1,
+                                    ),
+                                    borderRadius:
+                                        BorderRadius.circular(
+                                      12,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const Icon(
+                                        Icons
+                                            .check_circle_rounded,
+                                        color:
+                                            AppColors.success,
+                                        size: 20,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          'Review saved. Your next review has been scheduled.',
+                                          style: AppTextStyles
+                                              .bodyMedium,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                              ),
                             ],
                           ),
                         ),
@@ -177,14 +300,78 @@ class _RecallScreenState extends State<RecallScreen> {
   }
 }
 
-class _RecallOption extends StatelessWidget {
-  final String text;
+class _RecallScale extends StatelessWidget {
+  final int? selectedScore;
+  final bool enabled;
+  final ValueChanged<int> onSelected;
+
+  const _RecallScale({
+    required this.selectedScore,
+    required this.enabled,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Row(
+          children: List.generate(
+            6,
+            (index) {
+              final selected =
+                  selectedScore == index;
+
+              return Expanded(
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    right: index == 5 ? 0 : 6,
+                  ),
+                  child: _ScoreButton(
+                    score: index,
+                    selected: selected,
+                    enabled: enabled,
+                    onTap: () => onSelected(index),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          mainAxisAlignment:
+              MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Forgot it',
+              style:
+                  AppTextStyles.bodySmall.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+            Text(
+              'Perfect recall',
+              style:
+                  AppTextStyles.bodySmall.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _ScoreButton extends StatelessWidget {
+  final int score;
   final bool selected;
   final bool enabled;
   final VoidCallback onTap;
 
-  const _RecallOption({
-    required this.text,
+  const _ScoreButton({
+    required this.score,
     required this.selected,
     required this.enabled,
     required this.onTap,
@@ -194,41 +381,32 @@ class _RecallOption extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: selected
-          ? AppColors.primaryLight
+          ? AppColors.primary
           : AppColors.background,
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         onTap: enabled ? onTap : null,
         borderRadius: BorderRadius.circular(12),
         child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(14),
+          height: 48,
+          alignment: Alignment.center,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: selected
                   ? AppColors.primary
                   : AppColors.border,
+              width: selected ? 1.5 : 1,
             ),
           ),
-          child: Row(
-            children: [
-              Icon(
-                selected
-                    ? Icons.radio_button_checked
-                    : Icons.radio_button_off,
-                color: selected
-                    ? AppColors.primary
-                    : AppColors.textSecondary,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  text,
-                  style: AppTextStyles.bodyMedium,
-                ),
-              ),
-            ],
+          child: Text(
+            '$score',
+            style: AppTextStyles.labelLarge.copyWith(
+              color: selected
+                  ? Colors.white
+                  : AppColors.textPrimary,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ),
       ),
